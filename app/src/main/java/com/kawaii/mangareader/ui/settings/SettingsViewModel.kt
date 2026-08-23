@@ -35,6 +35,35 @@ class SettingsViewModel(
     private val _toastMessage = MutableSharedFlow<String>()
     val toastMessage: SharedFlow<String> = _toastMessage.asSharedFlow()
 
+    private val _appUpdateInfo = MutableStateFlow<com.kawaii.mangareader.data.remote.AppUpdateInfo?>(null)
+    val appUpdateInfo: StateFlow<com.kawaii.mangareader.data.remote.AppUpdateInfo?> = _appUpdateInfo.asStateFlow()
+
+    private val _isCheckingUpdate = MutableStateFlow(false)
+    val isCheckingUpdate: StateFlow<Boolean> = _isCheckingUpdate.asStateFlow()
+
+    fun dismissUpdateDialog() {
+        _appUpdateInfo.value = null
+    }
+
+    fun checkAppUpdate(manual: Boolean = true) {
+        viewModelScope.launch {
+            _isCheckingUpdate.value = true
+            val result = com.kawaii.mangareader.data.remote.GitHubUpdateChecker.checkForUpdates()
+            _isCheckingUpdate.value = false
+            result.onSuccess { info ->
+                if (info.hasUpdate) {
+                    _appUpdateInfo.value = info
+                } else if (manual) {
+                    _toastMessage.emit("¡Ya tienes la versión más reciente! (v${info.currentVersion}) ✨")
+                }
+            }.onFailure { err ->
+                if (manual) {
+                    _toastMessage.emit("No se pudo comprobar actualizaciones: ${err.localizedMessage ?: "Error de red"}")
+                }
+            }
+        }
+    }
+
     val currentTheme: StateFlow<AppTheme> = settingsRepository.observeAppTheme()
         .stateIn(
             scope = viewModelScope,

@@ -65,7 +65,7 @@ class UserPreferencesManager(private val context: Context) {
     }
 
     val appThemeFlow: Flow<AppTheme> = context.dataStore.data.map { preferences ->
-        val themeName = preferences[PreferencesKeys.APP_THEME] ?: AppTheme.SAKURA_PINK.name
+        val themeName = preferences[PreferencesKeys.APP_THEME] ?: AppTheme.PASTEL_DARK.name
         AppTheme.fromName(themeName)
     }
 

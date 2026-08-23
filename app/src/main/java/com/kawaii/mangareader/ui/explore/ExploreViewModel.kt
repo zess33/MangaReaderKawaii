@@ -72,9 +72,28 @@ class ExploreViewModel(
         }
     }
 
+    private val _appUpdateInfo = MutableStateFlow<com.kawaii.mangareader.data.remote.AppUpdateInfo?>(null)
+    val appUpdateInfo: StateFlow<com.kawaii.mangareader.data.remote.AppUpdateInfo?> = _appUpdateInfo.asStateFlow()
+
+    fun dismissUpdateDialog() {
+        _appUpdateInfo.value = null
+    }
+
     init {
         loadInitialData()
         observeAllowBlYaoi()
+        checkAppUpdatesOnLaunch()
+    }
+
+    private fun checkAppUpdatesOnLaunch() {
+        viewModelScope.launch {
+            val result = com.kawaii.mangareader.data.remote.GitHubUpdateChecker.checkForUpdates()
+            result.onSuccess { info ->
+                if (info.hasUpdate) {
+                    _appUpdateInfo.value = info
+                }
+            }
+        }
     }
 
     private fun observeAllowBlYaoi() {

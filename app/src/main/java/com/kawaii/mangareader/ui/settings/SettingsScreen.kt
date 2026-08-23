@@ -76,6 +76,8 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val currentTheme by viewModel.currentTheme.collectAsState()
     val currentAppIcon by viewModel.currentAppIcon.collectAsState()
+    val appUpdateInfo by viewModel.appUpdateInfo.collectAsState()
+    val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
     val dedicationMessage by viewModel.dedicationMessage.collectAsState()
     val readerSettings by viewModel.readerSettings.collectAsState()
     val allowBlYaoi by viewModel.allowBlYaoi.collectAsState()
@@ -590,25 +592,62 @@ fun SettingsScreen(
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "🌸 MangaReader Kawaii v1.1 🌸",
+                            text = "🌸 MangaReader Kawaii 🌸",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Creado con amor exclusivamente en Español para disfrutar de los mejores mangas, manhwas y webtoons ✨",
+                            text = "Desarrollada por Uriel Huerta",
                             style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Creado con mucho cariño para disfrutar de los mejores mangas, manhwas y webtoons en español ✨",
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
+                        Text(
+                            text = "Versión 1.0.0",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Button(
+                            onClick = { viewModel.checkAppUpdate(manual = true) },
+                            enabled = !isCheckingUpdate,
+                            shape = PillShape,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = if (isCheckingUpdate) "Buscando actualizaciones..." else "🔄 Buscar actualizaciones",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+
+    // App Update Dialog
+    if (appUpdateInfo != null && appUpdateInfo!!.hasUpdate) {
+        com.kawaii.mangareader.ui.components.AppUpdateDialog(
+            updateInfo = appUpdateInfo!!,
+            onDismiss = { viewModel.dismissUpdateDialog() }
+        )
     }
 
     // Dialog to edit dedication text

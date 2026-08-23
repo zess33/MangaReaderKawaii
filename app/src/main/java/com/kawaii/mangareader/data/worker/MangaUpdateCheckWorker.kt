@@ -72,7 +72,7 @@ class MangaUpdateCheckWorker(
             for (manga in libraryMangas) {
                 try {
                     val localChapters = chapterDao.getChaptersByMangaId(manga.id)
-                    val localLatestNum = localChapters.dmapNotNull { it.chapterNumber.toDoubleOrNull() }.maxOrNull() ?: 0.0
+                    val localLatestNum = localChapters.mapNotNull { it.chapterNumber.toDoubleOrNull() }.maxOrNull() ?: 0.0
 
                     val feedResponse = api.getMangaFeed(
                         mangaId = manga.id,

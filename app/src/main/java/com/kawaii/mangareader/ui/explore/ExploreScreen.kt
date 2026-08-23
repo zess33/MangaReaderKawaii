@@ -84,6 +84,7 @@ fun ExploreScreen(
     onMangaClick: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val appUpdateInfo by viewModel.appUpdateInfo.collectAsState()
     val dedicationMessage by viewModel.dedicationMessage.collectAsState()
     val isFirstLaunch by viewModel.isFirstLaunch.collectAsState()
     val allowBlYaoi by viewModel.allowBlYaoi.collectAsState()
@@ -430,6 +431,13 @@ fun ExploreScreen(
     if (isFirstLaunch) {
         RomanticWelcomeDialog(
             onDismiss = { viewModel.dismissFirstLaunchDialog() }
+        )
+    }
+
+    if (appUpdateInfo != null && appUpdateInfo!!.hasUpdate) {
+        com.kawaii.mangareader.ui.components.AppUpdateDialog(
+            updateInfo = appUpdateInfo!!,
+            onDismiss = { viewModel.dismissUpdateDialog() }
         )
     }
 }
