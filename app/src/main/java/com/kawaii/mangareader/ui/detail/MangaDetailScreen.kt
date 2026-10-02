@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
@@ -41,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -213,12 +216,24 @@ fun MangaDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             val hasChapters = uiState.allChapters.isNotEmpty()
+                            val lastReadNum = manga.lastReadChapterNum
+                            val lastReadId = manga.lastReadChapterId
+
                             Button(
                                 onClick = {
                                     if (hasChapters) {
-                                        val firstChapter = uiState.allChapters.firstOrNull()
-                                        if (firstChapter != null) {
-                                            onChapterClick(manga.id, firstChapter.id)
+                                        val targetChapter = if (lastReadId != null) {
+                                            uiState.allChapters.find { it.id == lastReadId }
+                                        } else if (lastReadNum != null) {
+                                            uiState.allChapters.find { it.chapterNumber == lastReadNum }
+                                        } else null
+
+                                        val chapterToOpen = targetChapter
+                                            ?: uiState.allChapters.minByOrNull { it.normalizedNumber }
+                                            ?: uiState.allChapters.firstOrNull()
+
+                                        if (chapterToOpen != null) {
+                                            onChapterClick(manga.id, chapterToOpen.id)
                                         }
                                     } else {
                                         val encodedTitle = java.net.URLEncoder.encode(manga.title, "UTF-8")
@@ -240,7 +255,7 @@ fun MangaDetailScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (hasChapters) {
-                                        if (manga.lastReadChapterNum != null) "Reanudar Cap. ${manga.lastReadChapterNum}" else "Empezar a Leer"
+                                        if (lastReadNum != null) "Reanudar Cap. $lastReadNum" else "Empezar a Leer"
                                     } else {
                                         "Leer en Visor Espejo 🌸"
                                     },
@@ -377,14 +392,46 @@ fun MangaDetailScreen(
                                 color = MaterialTheme.colorScheme.onBackground
                             )
 
-                            if (uiState.filteredChapters.isNotEmpty()) {
-                                Text(
-                                    text = "Descargar todo ⬇️",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.clickable { viewModel.downloadAllChapters() }
-                                )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Filtro Orden Ascendente / Descendente
+                                Box(
+                                    modifier = Modifier
+                                        .clip(PillShape)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                        .clickable { viewModel.toggleSortOrder() }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (uiState.isSortDescending) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                                            contentDescription = "Ordenar capítulos",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Text(
+                                            text = if (uiState.isSortDescending) "Más recientes" else "Primeros caps",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                if (uiState.filteredChapters.isNotEmpty()) {
+                                    Text(
+                                        text = "Descargar todo ⬇️",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.clickable { viewModel.downloadAllChapters() }
+                                    )
+                                }
                             }
                         }
 
@@ -505,8 +552,13 @@ fun MangaDetailScreen(
                     }
                 } else {
                     items(uiState.displayedChapters, key = { it.id }) { chapter ->
+                        val isLastRead = chapter.id == manga.lastReadChapterId ||
+                                (manga.lastReadChapterNum != null && chapter.chapterNumber == manga.lastReadChapterNum)
+                        val pageToDisplay = if (isLastRead && manga.lastReadPage > 0) manga.lastReadPage else chapter.lastReadPage
                         ChapterItemRow(
                             chapter = chapter,
+                            isLastRead = isLastRead,
+                            lastReadPage = pageToDisplay,
                             onClick = { onChapterClick(manga.id, chapter.id) },
                             onDownloadClick = { viewModel.downloadChapter(chapter) }
                         )
@@ -606,6 +658,8 @@ fun MangaDetailScreen(
 @Composable
 fun ChapterItemRow(
     chapter: Chapter,
+    isLastRead: Boolean = false,
+    lastReadPage: Int = 0,
     onClick: () -> Unit,
     onDownloadClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -617,9 +671,13 @@ fun ChapterItemRow(
             .clickable(onClick = onClick),
         shape = SquircleShape,
         colors = CardDefaults.cardColors(
-            containerColor = if (chapter.isRead) MaterialTheme.colorScheme.surface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surface
+            containerColor = when {
+                isLastRead -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                chapter.isRead -> MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                else -> MaterialTheme.colorScheme.surface
+            }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isLastRead) 2.dp else 1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -637,8 +695,8 @@ fun ChapterItemRow(
                     Text(
                         text = "${chapter.languageFlag} ${chapter.displayTitle}",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (chapter.isRead) FontWeight.Normal else FontWeight.Bold,
-                        color = if (chapter.isRead) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                        fontWeight = if (isLastRead) FontWeight.ExtraBold else if (chapter.isRead) FontWeight.Normal else FontWeight.Bold,
+                        color = if (isLastRead) MaterialTheme.colorScheme.primary else if (chapter.isRead) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -650,6 +708,21 @@ fun ChapterItemRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    if (isLastRead) {
+                        Surface(
+                            shape = PillShape,
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Text(
+                                text = if (lastReadPage > 0) "📍 Leyendo • Pág. ${lastReadPage + 1}" else "📍 Leyendo",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
                     if (!chapter.scanlationGroup.isNullOrBlank()) {
                         Text(
                             text = chapter.scanlationGroup ?: "",

@@ -12,4 +12,5 @@ interface MangaRepository {
     suspend fun getRandomManga(): Result<Manga>
     suspend fun getAvailableTags(): Result<List<MangaTag>>
     fun observeManga(mangaId: String): Flow<Manga?>
+    suspend fun updateMangaProgress(manga: Manga, chapterId: String, chapterNumber: String, pageIndex: Int)
 }

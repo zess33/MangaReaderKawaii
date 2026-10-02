@@ -19,7 +19,7 @@ def get_github_token():
                 token = f.read().strip()
     return token
 
-def publish_release(version_tag="v1.0.0", release_title=None, release_notes=None):
+def publish_release(version_tag="v1.0.0", release_title=None, release_notes=None, skip_build=False):
     if release_title is None:
         release_title = f"MangaReader Kawaii {version_tag} (Jasubileem Edition)"
     if release_notes is None:
@@ -30,12 +30,14 @@ def publish_release(version_tag="v1.0.0", release_title=None, release_notes=None
         print("Error: GITHUB_TOKEN no encontrado en variables de entorno ni en ~/.github_manga_token.")
         return False
 
-    print(f"--> [1/4] Compilando APK para la versión {version_tag}...")
-    subprocess.run(["./gradlew", "assembleDebug"], cwd=PROJECT_DIR, check=True)
+    if not skip_build or not os.path.exists(APK_PATH):
+        print(f"--> [1/4] Compilando APK para la versión {version_tag}...")
+        subprocess.run(["./gradlew", "assembleDebug"], cwd=PROJECT_DIR, check=True)
 
-    source_apk = os.path.join(PROJECT_DIR, "app/build/outputs/apk/debug/app-debug.apk")
-    subprocess.run(["cp", "-f", source_apk, APK_PATH], check=True)
-    print(f"--> [2/4] APK listo en: {APK_PATH}")
+        source_apk = os.path.join(PROJECT_DIR, "app/build/outputs/apk/debug/app-debug.apk")
+        subprocess.run(["cp", "-f", source_apk, APK_PATH], check=True)
+    
+    print(f"--> [2/4] APK listo en: {APK_PATH} ({os.path.getsize(APK_PATH) / 1024 / 1024:.2f} MB)")
 
     headers = {
         "Authorization": f"Bearer {token}",
@@ -98,4 +100,5 @@ if __name__ == "__main__":
     tag = sys.argv[1] if len(sys.argv) > 1 else "v1.0.0"
     title = sys.argv[2] if len(sys.argv) > 2 else f"MangaReader Kawaii {tag}"
     notes = sys.argv[3] if len(sys.argv) > 3 else "Mejoras de rendimiento, temas visuales y auto-actualizador integrado."
-    publish_release(tag, title, notes)
+    skip = "--skip-build" in sys.argv
+    publish_release(tag, title, notes, skip_build=skip)

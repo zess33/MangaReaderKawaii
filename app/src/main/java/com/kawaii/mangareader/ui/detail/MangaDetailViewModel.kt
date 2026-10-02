@@ -25,6 +25,7 @@ data class MangaDetailUiState(
     val isInLibrary: Boolean = false,
     val currentCategory: LibraryCategory? = null,
     val isCategorySheetOpen: Boolean = false,
+    val isSortDescending: Boolean = true, // Default: Más recientes al inicio
     val errorMessage: String? = null,
     val isDownloadingAll: Boolean = false,
     val isSearchingMirrors: Boolean = false,
@@ -54,7 +55,17 @@ class MangaDetailViewModel(
         viewModelScope.launch {
             mangaRepository.observeManga(mangaId).collect { localManga ->
                 if (localManga != null) {
+                    val current = _uiState.value.manga
+                    val updated = (current ?: localManga).copy(
+                        inLibrary = localManga.inLibrary,
+                        libraryCategory = localManga.libraryCategory,
+                        lastReadChapterId = localManga.lastReadChapterId,
+                        lastReadChapterNum = localManga.lastReadChapterNum,
+                        lastReadPage = localManga.lastReadPage,
+                        lastReadTimestamp = localManga.lastReadTimestamp
+                    )
                     _uiState.value = _uiState.value.copy(
+                        manga = updated,
                         isInLibrary = localManga.inLibrary,
                         currentCategory = localManga.libraryCategory
                     )
@@ -67,7 +78,7 @@ class MangaDetailViewModel(
         viewModelScope.launch {
             chapterRepository.observeChapters(mangaId).collect { localList ->
                 if (localList.isNotEmpty()) {
-                    updateChapterLists(localList, _uiState.value.selectedScan, _uiState.value.selectedRangeIndex)
+                    updateChapterLists(localList, _uiState.value.selectedScan, _uiState.value.selectedRangeIndex, _uiState.value.isSortDescending)
                 }
             }
         }
@@ -90,7 +101,7 @@ class MangaDetailViewModel(
                     isInLibrary = manga?.inLibrary ?: false,
                     currentCategory = manga?.libraryCategory
                 )
-                updateChapterLists(chapters, _uiState.value.selectedScan, _uiState.value.selectedRangeIndex)
+                updateChapterLists(chapters, _uiState.value.selectedScan, _uiState.value.selectedRangeIndex, _uiState.value.isSortDescending)
             } else {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -100,9 +111,20 @@ class MangaDetailViewModel(
         }
     }
 
+    fun toggleSortOrder() {
+        val newSort = !_uiState.value.isSortDescending
+        _uiState.value = _uiState.value.copy(isSortDescending = newSort)
+        updateChapterLists(
+            chapters = _uiState.value.allChapters,
+            selectedScan = _uiState.value.selectedScan,
+            rangeIndex = _uiState.value.selectedRangeIndex,
+            isDescending = newSort
+        )
+    }
+
     fun selectScan(scanName: String?) {
         _uiState.value = _uiState.value.copy(selectedScan = scanName)
-        updateChapterLists(_uiState.value.allChapters, scanName, _uiState.value.selectedRangeIndex)
+        updateChapterLists(_uiState.value.allChapters, scanName, _uiState.value.selectedRangeIndex, _uiState.value.isSortDescending)
     }
 
     fun selectRange(rangeIndex: Int?) {
@@ -117,13 +139,18 @@ class MangaDetailViewModel(
         _uiState.value = _uiState.value.copy(displayedChapters = displayed)
     }
 
-    private fun updateChapterLists(chapters: List<Chapter>, selectedScan: String?, rangeIndex: Int? = null) {
+    private fun updateChapterLists(
+        chapters: List<Chapter>,
+        selectedScan: String?,
+        rangeIndex: Int? = null,
+        isDescending: Boolean = _uiState.value.isSortDescending
+    ) {
         val scans = chapters.mapNotNull { it.scanlationGroup?.trim() }
             .filter { it.isNotBlank() }
             .distinct()
             .sorted()
 
-        val filtered = if (selectedScan != null) {
+        val deduplicated = if (selectedScan != null) {
             chapters.filter { it.scanlationGroup?.trim() == selectedScan }
         } else {
             // Smart Gap-Filling & Deduplicated mode: for each chapter number, pick the latest / best one
@@ -131,7 +158,12 @@ class MangaDetailViewModel(
                 .map { (_, groupChapters) ->
                     groupChapters.maxByOrNull { it.publishAt ?: "" } ?: groupChapters.first()
                 }
-                .sortedBy { it.normalizedNumber }
+        }
+
+        val filtered = if (isDescending) {
+            deduplicated.sortedByDescending { it.normalizedNumber }
+        } else {
+            deduplicated.sortedBy { it.normalizedNumber }
         }
 
         // Build ranges of 25 chapters
@@ -158,7 +190,8 @@ class MangaDetailViewModel(
             chapterRanges = ranges,
             displayedChapters = displayed,
             availableScans = scans,
-            selectedRangeIndex = rangeIndex
+            selectedRangeIndex = rangeIndex,
+            isSortDescending = isDescending
         )
     }
 
@@ -195,39 +228,44 @@ class MangaDetailViewModel(
 
     fun downloadChapter(chapter: Chapter) {
         val manga = _uiState.value.manga ?: return
-        downloadManager.enqueueChapterDownload(manga, chapter)
+        viewModelScope.launch {
+            downloadManager.enqueueChapterDownload(manga, chapter)
+        }
     }
 
     fun downloadAllChapters() {
         val manga = _uiState.value.manga ?: return
-        _uiState.value = _uiState.value.copy(isDownloadingAll = true)
+        val chapters = _uiState.value.filteredChapters
         viewModelScope.launch {
-            _uiState.value.filteredChapters.filter { !it.isDownloaded }.forEach { chapter ->
-                downloadManager.enqueueChapterDownload(manga, chapter)
+            _uiState.value = _uiState.value.copy(isDownloadingAll = true)
+            for (chapter in chapters) {
+                if (!chapter.isDownloaded) {
+                    downloadManager.enqueueChapterDownload(manga, chapter)
+                }
             }
             _uiState.value = _uiState.value.copy(isDownloadingAll = false)
         }
     }
 
     fun searchMirrorChapters() {
-        val title = _uiState.value.manga?.title ?: return
-        _uiState.value = _uiState.value.copy(isSearchingMirrors = true)
+        val manga = _uiState.value.manga ?: return
         viewModelScope.launch {
-            try {
-                val mirrorMangas = com.kawaii.mangareader.data.remote.extractor.SpanishMirrorExtractor.searchSpanishMirror(title)
-                val mirrorManga = mirrorMangas.firstOrNull()
-                if (mirrorManga != null) {
-                    val mirrorChapters = chapterRepository.getChaptersForManga(mirrorManga.id).getOrDefault(emptyList())
-                    if (mirrorChapters.isNotEmpty()) {
-                        val merged = (_uiState.value.allChapters + mirrorChapters).distinctBy { it.chapterNumber }
-                        updateChapterLists(merged, _uiState.value.selectedScan)
-                    }
+            _uiState.value = _uiState.value.copy(isSearchingMirrors = true)
+            val mirrorResults = mangaRepository.searchManga(
+                query = manga.title,
+                offset = 0,
+                limit = 5
+            ).getOrDefault(emptyList())
+
+            val mirrorManga = mirrorResults.firstOrNull { it.id != manga.id }
+            if (mirrorManga != null) {
+                val mirrorChapters = chapterRepository.getChaptersForManga(mirrorManga.id).getOrDefault(emptyList())
+                if (mirrorChapters.isNotEmpty()) {
+                    val combined = (_uiState.value.allChapters + mirrorChapters).distinctBy { it.id }
+                    updateChapterLists(combined, _uiState.value.selectedScan, _uiState.value.selectedRangeIndex, _uiState.value.isSortDescending)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                _uiState.value = _uiState.value.copy(isSearchingMirrors = false)
             }
+            _uiState.value = _uiState.value.copy(isSearchingMirrors = false)
         }
     }
 }

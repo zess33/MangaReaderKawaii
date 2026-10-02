@@ -3,6 +3,7 @@ package com.kawaii.mangareader.data.repository
 import com.kawaii.mangareader.data.local.dao.ChapterDao
 import com.kawaii.mangareader.data.local.dao.MangaDao
 import com.kawaii.mangareader.data.local.entity.ChapterEntity
+import com.kawaii.mangareader.data.local.entity.MangaEntity
 import com.kawaii.mangareader.data.remote.MangaDexClient
 import com.kawaii.mangareader.data.remote.MangaDexUrlBuilder
 import com.kawaii.mangareader.data.remote.api.MangaDexApi
@@ -182,7 +183,21 @@ class ChapterRepositoryImpl(
     ) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         chapterDao.updateLastReadPage(chapterId, pageIndex)
-        mangaDao.updateReadingProgress(mangaId, chapterId, chapterNumber, pageIndex, now)
+
+        val existingManga = mangaDao.getMangaById(mangaId)
+        if (existingManga != null) {
+            mangaDao.updateReadingProgress(mangaId, chapterId, chapterNumber, pageIndex, now)
+        } else {
+            val newEntity = MangaEntity(
+                id = mangaId,
+                title = chapterTitle ?: "Manga",
+                lastReadChapterId = chapterId,
+                lastReadChapterNum = chapterNumber,
+                lastReadPage = pageIndex,
+                lastReadTimestamp = now
+            )
+            mangaDao.insertOrUpdate(newEntity)
+        }
 
         if (totalPages > 0 && pageIndex >= totalPages - 1) {
             chapterDao.updateReadStatus(chapterId, true)

@@ -70,13 +70,14 @@ class MangaReaderViewModel(
         loadChapter(initialChapterId)
     }
 
-    fun loadChapter(chapterId: String) {
+    fun loadChapter(chapterId: String, startAtBeginning: Boolean = false) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 chapterId = chapterId,
                 isLoading = true,
                 errorMessage = null,
                 zoomScale = 1f,
+                currentPageIndex = 0,
                 isAutoScrolling = false
             )
 
@@ -92,20 +93,29 @@ class MangaReaderViewModel(
 
             if (pagesResult.isSuccess) {
                 val pages = pagesResult.getOrNull() ?: emptyList()
-                val initialPage = currentChapter?.lastReadPage ?: 0
+                val initialPage = if (startAtBeginning) {
+                    0
+                } else {
+                    val savedPage = (if (chapterId == manga?.lastReadChapterId && (manga?.lastReadPage ?: 0) > 0) {
+                        manga?.lastReadPage
+                    } else {
+                        currentChapter?.lastReadPage
+                    }) ?: 0
+                    if (savedPage in pages.indices) savedPage else 0
+                }
 
                 _uiState.value = _uiState.value.copy(
                     manga = manga,
                     currentChapter = currentChapter,
                     allChapters = allChapters,
                     pages = pages,
-                    currentPageIndex = if (initialPage < pages.size) initialPage else 0,
+                    currentPageIndex = initialPage,
                     currentFilter = settings.visualFilter,
                     isInLibrary = inLibrary,
                     isLoading = false
                 )
 
-                recordProgress(if (initialPage < pages.size) initialPage else 0, pages.size)
+                recordProgress(initialPage, pages.size)
             } else {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -146,7 +156,7 @@ class MangaReaderViewModel(
 
     fun jumpToChapter(chapterId: String) {
         closeChaptersSheet()
-        loadChapter(chapterId)
+        loadChapter(chapterId, startAtBeginning = true)
     }
 
     fun toggleLock() {
@@ -225,6 +235,14 @@ class MangaReaderViewModel(
                 totalPages = totalPages
             )
 
+            // Update in manga table
+            mangaRepository.updateMangaProgress(
+                manga = manga,
+                chapterId = chapter.id,
+                chapterNumber = chapter.chapterNumber,
+                pageIndex = pageIndex
+            )
+
             // Update in reading history
             historyRepository.recordHistory(
                 mangaId = manga.id,
@@ -240,20 +258,20 @@ class MangaReaderViewModel(
     }
 
     fun nextChapter() {
-        val chapters = _uiState.value.allChapters
-        val currentIdx = chapters.indexOfFirst { it.id == _uiState.value.chapterId }
-        if (currentIdx != -1 && currentIdx + 1 < chapters.size) {
-            val nextChap = chapters[currentIdx + 1]
-            loadChapter(nextChap.id)
+        val sorted = _uiState.value.allChapters.sortedBy { it.normalizedNumber }
+        val currentIdx = sorted.indexOfFirst { it.id == _uiState.value.chapterId }
+        if (currentIdx != -1 && currentIdx + 1 < sorted.size) {
+            val nextChap = sorted[currentIdx + 1]
+            loadChapter(nextChap.id, startAtBeginning = true)
         }
     }
 
     fun previousChapter() {
-        val chapters = _uiState.value.allChapters
-        val currentIdx = chapters.indexOfFirst { it.id == _uiState.value.chapterId }
+        val sorted = _uiState.value.allChapters.sortedBy { it.normalizedNumber }
+        val currentIdx = sorted.indexOfFirst { it.id == _uiState.value.chapterId }
         if (currentIdx > 0) {
-            val prevChap = chapters[currentIdx - 1]
-            loadChapter(prevChap.id)
+            val prevChap = sorted[currentIdx - 1]
+            loadChapter(prevChap.id, startAtBeginning = true)
         }
     }
 }

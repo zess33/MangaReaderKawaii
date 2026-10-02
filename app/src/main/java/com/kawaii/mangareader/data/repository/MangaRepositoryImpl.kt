@@ -1,6 +1,7 @@
 package com.kawaii.mangareader.data.repository
 
 import com.kawaii.mangareader.data.local.dao.MangaDao
+import com.kawaii.mangareader.data.local.entity.MangaEntity
 import com.kawaii.mangareader.data.remote.MangaDexClient
 import com.kawaii.mangareader.data.remote.MangaDexUrlBuilder
 import com.kawaii.mangareader.data.remote.api.MangaDexApi
@@ -30,7 +31,14 @@ class MangaRepositoryImpl(
             )
             val mangas = response.data.map { dto ->
                 val local = mangaDao.getMangaById(dto.id)
-                dto.toDomain(inLibrary = local?.inLibrary ?: false, libraryCategory = local?.toDomain()?.libraryCategory)
+                dto.toDomain(
+                    inLibrary = local?.inLibrary ?: false,
+                    libraryCategory = local?.toDomain()?.libraryCategory,
+                    lastReadChapterId = local?.lastReadChapterId,
+                    lastReadChapterNum = local?.lastReadChapterNum,
+                    lastReadPage = local?.lastReadPage ?: 0,
+                    lastReadTimestamp = local?.lastReadTimestamp ?: 0L
+                )
             }
             Result.success(mangas)
         } catch (e: Exception) {
@@ -51,7 +59,14 @@ class MangaRepositoryImpl(
             )
             val mangas = response.data.map { dto ->
                 val local = mangaDao.getMangaById(dto.id)
-                dto.toDomain(inLibrary = local?.inLibrary ?: false, libraryCategory = local?.toDomain()?.libraryCategory)
+                dto.toDomain(
+                    inLibrary = local?.inLibrary ?: false,
+                    libraryCategory = local?.toDomain()?.libraryCategory,
+                    lastReadChapterId = local?.lastReadChapterId,
+                    lastReadChapterNum = local?.lastReadChapterNum,
+                    lastReadPage = local?.lastReadPage ?: 0,
+                    lastReadTimestamp = local?.lastReadTimestamp ?: 0L
+                )
             }
             Result.success(mangas)
         } catch (e: Exception) {
@@ -81,7 +96,14 @@ class MangaRepositoryImpl(
             )
             val mangas = response.data.map { dto ->
                 val local = mangaDao.getMangaById(dto.id)
-                dto.toDomain(inLibrary = local?.inLibrary ?: false, libraryCategory = local?.toDomain()?.libraryCategory)
+                dto.toDomain(
+                    inLibrary = local?.inLibrary ?: false,
+                    libraryCategory = local?.toDomain()?.libraryCategory,
+                    lastReadChapterId = local?.lastReadChapterId,
+                    lastReadChapterNum = local?.lastReadChapterNum,
+                    lastReadPage = local?.lastReadPage ?: 0,
+                    lastReadTimestamp = local?.lastReadTimestamp ?: 0L
+                )
             }
 
             val mirrorResults = if (titleParam != null && offset == 0) {
@@ -105,8 +127,15 @@ class MangaRepositoryImpl(
             val local = mangaDao.getMangaById(mangaId)
             val manga = response.data.toDomain(
                 inLibrary = local?.inLibrary ?: false,
-                libraryCategory = local?.toDomain()?.libraryCategory
+                libraryCategory = local?.toDomain()?.libraryCategory,
+                lastReadChapterId = local?.lastReadChapterId,
+                lastReadChapterNum = local?.lastReadChapterNum,
+                lastReadPage = local?.lastReadPage ?: 0,
+                lastReadTimestamp = local?.lastReadTimestamp ?: 0L
             )
+            if (local == null) {
+                mangaDao.insertOrUpdate(MangaEntity.fromDomain(manga))
+            }
             Result.success(manga)
         } catch (e: Exception) {
             val local = mangaDao.getMangaById(mangaId)
@@ -124,7 +153,11 @@ class MangaRepositoryImpl(
             val local = mangaDao.getMangaById(response.data.id)
             val manga = response.data.toDomain(
                 inLibrary = local?.inLibrary ?: false,
-                libraryCategory = local?.toDomain()?.libraryCategory
+                libraryCategory = local?.toDomain()?.libraryCategory,
+                lastReadChapterId = local?.lastReadChapterId,
+                lastReadChapterNum = local?.lastReadChapterNum,
+                lastReadPage = local?.lastReadPage ?: 0,
+                lastReadTimestamp = local?.lastReadTimestamp ?: 0L
             )
             Result.success(manga)
         } catch (e: Exception) {
@@ -156,11 +189,41 @@ class MangaRepositoryImpl(
     override fun observeManga(mangaId: String): Flow<Manga?> {
         return mangaDao.observeMangaById(mangaId).map { it?.toDomain() }
     }
+
+    override suspend fun updateMangaProgress(
+        manga: Manga,
+        chapterId: String,
+        chapterNumber: String,
+        pageIndex: Int
+    ) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val local = mangaDao.getMangaById(manga.id)
+        val entity = if (local != null) {
+            local.copy(
+                lastReadChapterId = chapterId,
+                lastReadChapterNum = chapterNumber,
+                lastReadPage = pageIndex,
+                lastReadTimestamp = now
+            )
+        } else {
+            MangaEntity.fromDomain(manga).copy(
+                lastReadChapterId = chapterId,
+                lastReadChapterNum = chapterNumber,
+                lastReadPage = pageIndex,
+                lastReadTimestamp = now
+            )
+        }
+        mangaDao.insertOrUpdate(entity)
+    }
 }
 
 fun MangaDataDto.toDomain(
     inLibrary: Boolean = false,
-    libraryCategory: com.kawaii.mangareader.domain.model.LibraryCategory? = null
+    libraryCategory: com.kawaii.mangareader.domain.model.LibraryCategory? = null,
+    lastReadChapterId: String? = null,
+    lastReadChapterNum: String? = null,
+    lastReadPage: Int = 0,
+    lastReadTimestamp: Long = 0L
 ): Manga {
     val titleStr = attributes.title["es"]
         ?: attributes.title["es-la"]
@@ -210,6 +273,10 @@ fun MangaDataDto.toDomain(
         originalLanguage = attributes.originalLanguage,
         inLibrary = inLibrary,
         libraryCategory = libraryCategory,
-        latestChapter = attributes.lastChapter ?: attributes.latestUploadedChapter
+        latestChapter = attributes.lastChapter ?: attributes.latestUploadedChapter,
+        lastReadChapterId = lastReadChapterId,
+        lastReadChapterNum = lastReadChapterNum,
+        lastReadPage = lastReadPage,
+        lastReadTimestamp = lastReadTimestamp
     )
 }

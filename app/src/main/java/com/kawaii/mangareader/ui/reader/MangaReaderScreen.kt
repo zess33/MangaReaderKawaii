@@ -172,18 +172,28 @@ fun MangaReaderScreen(
         }
     }
 
-    // Track scroll position to update current page
-    LaunchedEffect(listState) {
+    // Reset zoom and scroll state immediately when chapter changes
+    LaunchedEffect(uiState.chapterId) {
+        scale = 1f
+        offset = Offset.Zero
+        listState.scrollToItem(0)
+    }
+
+    // Track scroll position to update current page only when ready
+    LaunchedEffect(listState, uiState.chapterId) {
         snapshotFlow { listState.firstVisibleItemIndex }
             .collect { index ->
-                viewModel.onPageChanged(index)
+                if (!uiState.isLoading && uiState.pages.isNotEmpty()) {
+                    viewModel.onPageChanged(index)
+                }
             }
     }
 
-    // Scroll to initial page
-    LaunchedEffect(uiState.pages) {
-        if (uiState.currentPageIndex > 0 && uiState.currentPageIndex < uiState.pages.size) {
-            listState.scrollToItem(uiState.currentPageIndex)
+    // Scroll to initial target page
+    LaunchedEffect(uiState.chapterId, uiState.pages) {
+        if (!uiState.isLoading && uiState.pages.isNotEmpty()) {
+            val targetPage = uiState.currentPageIndex.coerceIn(0, uiState.pages.size - 1)
+            listState.scrollToItem(targetPage)
         }
     }
 
@@ -293,8 +303,16 @@ fun MangaReaderScreen(
                     }
                 } else {
                     val pagerState = rememberPagerState(pageCount = { uiState.pages.size })
+                    LaunchedEffect(uiState.chapterId, uiState.pages) {
+                        if (!uiState.isLoading && uiState.pages.isNotEmpty()) {
+                            val targetPage = uiState.currentPageIndex.coerceIn(0, uiState.pages.size - 1)
+                            pagerState.scrollToPage(targetPage)
+                        }
+                    }
                     LaunchedEffect(pagerState.currentPage) {
-                        viewModel.onPageChanged(pagerState.currentPage)
+                        if (!uiState.isLoading && uiState.pages.isNotEmpty()) {
+                            viewModel.onPageChanged(pagerState.currentPage)
+                        }
                     }
                     HorizontalPager(
                         state = pagerState,
