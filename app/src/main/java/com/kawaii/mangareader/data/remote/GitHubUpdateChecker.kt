@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 data class AppUpdateInfo(
     val hasUpdate: Boolean = false,
     val latestVersion: String = "",
-    val currentVersion: String = "1.0.2",
+    val currentVersion: String = "1.0.3",
     val releaseTitle: String = "",
     val releaseNotes: String = "",
     val downloadUrl: String = "",
@@ -23,7 +23,7 @@ data class AppUpdateInfo(
 object GitHubUpdateChecker {
 
     var DEFAULT_REPO: String = "zess33/MangaReaderKawaii"
-    const val CURRENT_APP_VERSION: String = "1.0.2"
+    const val CURRENT_APP_VERSION: String = "1.0.3"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
