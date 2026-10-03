@@ -671,13 +671,9 @@ fun ChapterItemRow(
             .clickable(onClick = onClick),
         shape = SquircleShape,
         colors = CardDefaults.cardColors(
-            containerColor = when {
-                isLastRead -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                chapter.isRead -> MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                else -> MaterialTheme.colorScheme.surface
-            }
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isLastRead) 2.dp else 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -695,8 +691,8 @@ fun ChapterItemRow(
                     Text(
                         text = "${chapter.languageFlag} ${chapter.displayTitle}",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (isLastRead) FontWeight.ExtraBold else if (chapter.isRead) FontWeight.Normal else FontWeight.Bold,
-                        color = if (isLastRead) MaterialTheme.colorScheme.primary else if (chapter.isRead) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

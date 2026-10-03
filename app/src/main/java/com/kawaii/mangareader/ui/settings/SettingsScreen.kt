@@ -614,7 +614,7 @@ fun SettingsScreen(
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                         Text(
-                            text = "Versión 1.0.3 ✨",
+                            text = "Versión 1.0.4 ✨",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
